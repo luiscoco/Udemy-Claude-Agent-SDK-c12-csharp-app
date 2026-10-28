@@ -1,0 +1,9 @@
+bin/
+obj/
+.env
+.lab-data/
+appsettings.Local.json
+**/bin/
+**/obj/
+verification/*.png
+publish/

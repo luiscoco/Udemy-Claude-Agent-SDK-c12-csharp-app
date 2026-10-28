@@ -1,0 +1,12 @@
+{
+  "framework": "net10.0",
+  "ui": "Blazor Interactive Server",
+  "anthropicPackage": "13.3.0",
+  "build": "passed; zero warnings and errors",
+  "releasePublish": "passed",
+  "localAndMockSdkChecks": 141,
+  "http": "passed; local and live metadata, cleanup discovery, recorded-session allowlist, no-cache, request validation and page routes",
+  "browser": "passed; live selectors, recorded-session recovery controls, local interactions, theme, navigation and mobile width",
+  "liveProviderRequests": "Two existing sessions freshly observed idle and archived successfully; no sessions or work messages created; pending sessions endpoint returns []",
+  "resourceProvisioning": "not performed"
+}

@@ -1,0 +1,223 @@
+@page "/"
+@rendermode InteractiveServer
+@using System.Text.Json
+@using System.Text
+@using LessonC12.Services
+@inject LabService Lab
+
+<PageTitle>C12 · @Lesson.Title</PageTitle>
+<main class="wrap">
+    <StudentNav />
+    <header><div class="brand">How <span>Claude Managed Agents</span> Works</div><span class="badge">CONCEPT 12 / 60 · C#</span></header>
+    <section class="hero"><div><p class="eyebrow">LEARN BY RUNNING THE EXPERIMENT</p><h1>@Lesson.Title</h1><p class="lead">@Lesson.Description</p></div><img src="astronaut.png" alt="" class="astronaut" /></section>
+    <nav class="flow" aria-label="Experiment workflow">
+        <div><b>01</b><span>Configure<br /><small>Choose a scenario</small></span></div><i>→</i>
+        <div><b>02</b><span>Run<br /><small>Execute the host logic</small></span></div><i>→</i>
+        <div><b>03</b><span>Verify<br /><small>Inspect the evidence</small></span></div>
+    </nav>
+    <div class="grid">
+        <article class="card">
+            <p class="eyebrow">THE EXPERIMENT</p><h2>Try the workflow</h2>
+            <label>Scenario<select id="scenario" value="@selected" @onchange="SelectScenario" disabled="@busy">
+                @for (var i = 0; i < Lesson.Cases.Length; i++) { <option value="@i">@Lesson.Cases[i].Label</option> }
+            </select></label>
+            <label>Statuses (JSON array)<textarea id="statuses" rows="4" @bind="statuses" disabled="@busy"></textarea></label>
+            <label>Archive succeeds<input id="archiveSucceeds" type="checkbox" @bind="archiveSucceeds" disabled="@busy" /></label>
+            <p>Expected scenario outcome: <strong>@Lesson.Cases[selected].Expected</strong>. Edited inputs may change the result.</p>
+            <button id="run" disabled="@(busy || !interactiveReady)" @onclick="() => Run(false)">Run local experiment ↗</button>
+            <p id="status" role="status" aria-live="polite">@status</p>
+            <details><summary>What students learn</summary><ul>@foreach (var concept in Lesson.Concepts) { <li>@concept</li> }</ul></details>
+        </article>
+        <article class="card results">
+            <div class="result-head"><h2>Inspect the result</h2><span class="badge">LOCAL HOST</span></div>
+            @if (result is null) { <p>Run a scenario to see its outcome, evidence, and execution steps.</p> }
+            else
+            {
+                <strong id="outcome" class="outcome" data-state="@result.Outcome">@result.Outcome</strong><p>@result.Summary</p>
+                <h3>Execution steps</h3><ol>@foreach (var step in result.Steps) { <li>@step</li> }</ol>
+                <details open><summary>Structured evidence</summary><pre id="evidence">@JsonSerializer.Serialize(result.Evidence, LabService.Json)</pre></details>
+            }
+        </article>
+    </div>
+    <section class="note"><strong>Experiment scope</strong><p>@Lesson.Scope</p></section>
+    <section class="card" id="live-scenarios">
+        <p class="eyebrow">LIVE RUN SCENARIOS</p><h2>Run the cleanup workflow against Claude</h2>
+        <p>Each run creates a real text-only session, sends work, attempts an interrupt, and checks the provider's status. API use may incur charges; each session has a $1 budget. Only this run's new session can be archived.</p>
+        <label>Live scenario<select id="live-scenario" @bind="liveScenario" disabled="@(busy || !interactiveReady)">
+            @foreach (var item in LiveScenarios.Cases) { <option value="@item.Id">@item.Label</option> }
+        </select></label>
+        <p>@LiveScenarios.Cases.First(item => item.Id == liveScenario).Description</p>
+        <p>Local statuses and the archive checkbox above apply only to local experiments. Live results use real observations. A timeout or archive failure is reported only when it actually occurs.</p>
+        @if (!Lab.LiveConfigured) { <p>Configure the API key, agent ID and environment ID, then restart to enable live runs.</p> }
+        <button id="run-live-scenario" disabled="@(busy || !interactiveReady || !Lab.LiveConfigured)" @onclick="RunLiveScenario">Run live scenario ↗</button>
+        @if (liveWork is not null)
+        {
+            <button id="cancel-live-work" disabled="@liveWork.IsCancellationRequested" @onclick="CancelLiveWork">Cancel work; continue cleanup</button>
+        }
+        <p id="live-scenario-status" role="status" aria-live="polite">@liveScenarioStatus</p>
+        @if (liveScenarioResult is not null)
+        {
+            <strong id="live-scenario-outcome" class="outcome" data-state="@liveScenarioResult.Outcome">@liveScenarioResult.Outcome</strong>
+            <p>@liveScenarioResult.Summary</p>
+            <p>Session: <code>@(liveScenarioResult.SessionId ?? "not confirmed")</code></p>
+            <p>Remote stop: <strong>@liveScenarioResult.RemoteStop</strong> · Cleanup: <strong>@liveScenarioResult.Cleanup</strong></p>
+            <p>Work message accepted: @liveScenarioResult.WorkAccepted · Active status observed: @liveScenarioResult.ActiveStatusObserved · Interrupt acknowledged: @liveScenarioResult.InterruptAcknowledged</p>
+            <h3>Execution steps</h3><ol>@foreach (var step in liveScenarioResult.Steps) { <li>@step</li> }</ol>
+            <h3>Provider observations</h3>
+            <div class="student-table"><table class="live-observations"><thead><tr><th>Time (UTC)</th><th>Phase</th><th>Status</th></tr></thead><tbody>
+                @foreach (var observation in liveScenarioResult.Observations) { <tr><td>@observation.At.ToString("HH:mm:ss.fff")</td><td>@observation.Phase</td><td>@observation.Status</td></tr> }
+            </tbody></table></div>
+            <details><summary>Full live evidence</summary><pre id="live-scenario-evidence">@JsonSerializer.Serialize(liveScenarioResult, LabService.Json)</pre></details>
+        }
+    </section>
+    <section class="card" id="finish-cleanup">
+        <p class="eyebrow">FINISH PREVIOUS RUNS</p><h2>Recheck and finish cleanup</h2>
+        <p>Choose a session recorded by this app. Recheck its current status, interrupt only if still unsettled, and archive after confirming idle. This creates no new session or work message.</p>
+        <button id="refresh-cleanup" disabled="@(busy || !interactiveReady)" @onclick="RefreshPending">Refresh pending sessions</button>
+        @if (pendingSessions.Length == 0)
+        {
+            <p id="no-pending-cleanup">No recorded sessions need cleanup.</p>
+        }
+        else
+        {
+            <label>Recorded session<select id="cleanup-session" @bind="cleanupSessionId" disabled="@(busy || !interactiveReady)">
+                @foreach (var session in pendingSessions)
+                {
+                    <option value="@session.SessionId">@session.SessionId · @session.Cleanup · @session.Scenario</option>
+                }
+            </select></label>
+            <button id="recheck-cleanup" disabled="@(busy || !interactiveReady || !Lab.CleanupConfigured)" @onclick="RecheckCleanup">Recheck and finish cleanup ↗</button>
+        }
+        @if (!Lab.CleanupConfigured) { <p>Configure your API key and restart to enable cleanup.</p> }
+        <p id="cleanup-status" role="status" aria-live="polite">@cleanupStatus</p>
+        @if (cleanupResult is not null)
+        {
+            <strong id="cleanup-outcome" class="outcome" data-state="@cleanupResult.Outcome">@cleanupResult.Outcome</strong>
+            <p>@cleanupResult.Summary</p>
+            <p>Session: <code>@cleanupResult.SessionId</code> · Remote stop: <strong>@cleanupResult.RemoteStop</strong> · Cleanup: <strong>@cleanupResult.Cleanup</strong></p>
+            <ol>@foreach (var step in cleanupResult.Steps) { <li>@step</li> }</ol>
+            <details><summary>Cleanup observations and evidence</summary><pre id="cleanup-evidence">@JsonSerializer.Serialize(cleanupResult, LabService.Json)</pre></details>
+        }
+    </section>
+    <section class="card"><p class="eyebrow">OPTIONAL LIVE PROVIDER</p><h2>Discuss the experiment with Claude</h2>
+        <p>This creates a real text-only Managed Agents session. It explains the local result; it does not certify the experiment or test external integrations. API use may incur charges. Credentials stay on the server.</p>
+        @if (!Lab.LiveConfigured) { <p>Set your API key, agent ID and environment ID, then restart to enable live commentary. See <a href="/guide.html#run-guide">run instructions</a>.</p> }
+        <button id="live" disabled="@(busy || !interactiveReady || !Lab.LiveConfigured)" @onclick="() => Run(true)">Request live commentary ↗</button>
+        @if (liveResult is not null)
+        {
+            <p id="live-answer">@liveResult.Value.GetProperty("answer").GetString()</p>
+            <details><summary>Live session evidence</summary><pre>@JsonSerializer.Serialize(liveResult, LabService.Json)</pre></details>
+        }
+    </section>
+    <section class="card source"><h2>How it works</h2><p>This is the actual C# implementation executed by the server.</p><details><summary>Read Services/Lesson.cs</summary><pre>@Lab.Source</pre></details></section>
+    <footer>CONFIGURE → RUN → VERIFY · Blazor / .NET 10 / Anthropic 13.3.0</footer>
+</main>
+
+@code {
+    private int selected;
+    private string statuses = "[\n  \"running\",\n  \"rescheduling\",\n  \"idle\"\n]";
+    private bool archiveSucceeds = true;
+    private bool busy;
+    private bool interactiveReady;
+    private string status = "Local experiment ready. Choose a scenario or edit its inputs.";
+    private ExperimentResult? result;
+    private JsonElement? liveResult;
+    private string liveScenario = "confirm-and-archive";
+    private string liveScenarioStatus = "Choose a live scenario. Real timing determines the outcome.";
+    private LiveScenarioResult? liveScenarioResult;
+    private CancellationTokenSource? liveWork;
+    private RecordedSession[] pendingSessions = [];
+    private string cleanupSessionId = "";
+    private string cleanupStatus = "Pending sessions are loaded from the local journals.";
+    private LiveScenarioResult? cleanupResult;
+
+    protected override void OnInitialized() => RefreshPending();
+
+    private void RefreshPending()
+    {
+        pendingSessions = Lab.PendingSessions();
+        if (!pendingSessions.Any(session => session.SessionId == cleanupSessionId))
+            cleanupSessionId = pendingSessions.FirstOrDefault()?.SessionId ?? "";
+    }
+
+    private async Task RecheckCleanup()
+    {
+        busy = true;
+        cleanupResult = null;
+        cleanupStatus = "Checking the recorded session and finishing cleanup using a fresh deadline…";
+        try
+        {
+            cleanupResult = await Lab.RecheckCleanupAsync(cleanupSessionId);
+            cleanupStatus = "Cleanup evidence recorded. The pending session list is up to date.";
+        }
+        catch (Exception error) { cleanupStatus = error.Message; }
+        finally { RefreshPending(); busy = false; }
+    }
+
+    private void CancelLiveWork()
+    {
+        liveWork?.Cancel();
+        liveScenarioStatus = "Work cancellation requested. Independent remote cleanup continues.";
+    }
+
+    private async Task RunLiveScenario()
+    {
+        busy = true;
+        liveScenarioResult = null;
+        liveScenarioStatus = "Creating a session, sending work, then interrupting and observing cleanup…";
+        liveWork = new CancellationTokenSource();
+        try
+        {
+            liveScenarioResult = await Lab.RunLiveScenarioAsync(liveScenario, liveWork.Token);
+            liveScenarioStatus = "Live result and provider observations recorded in the live run journal.";
+        }
+        catch (Exception error) { liveScenarioStatus = error.Message; }
+        finally
+        {
+            liveWork.Dispose();
+            liveWork = null;
+            RefreshPending();
+            busy = false;
+        }
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender) { interactiveReady = true; StateHasChanged(); }
+    }
+
+    private void SelectScenario(ChangeEventArgs args)
+    {
+        selected = int.Parse(args.Value?.ToString() ?? "0");
+        var input = Lesson.Cases[selected].Input;
+        statuses = JsonSerializer.Serialize(input.GetProperty("statuses"), LabService.Json);
+        archiveSucceeds = input.GetProperty("archiveSucceeds").GetBoolean();
+        status = "Scenario selected. Edit its inputs or run the experiment.";
+    }
+
+    private async Task Run(bool live)
+    {
+        busy = true;
+        status = live ? "Waiting for the live text-only session…" : "Running the local experiment…";
+        try
+        {
+            if (Encoding.UTF8.GetByteCount(statuses) > 60000) throw new ArgumentException("Input exceeds the sample limit");
+            using var parsed = JsonDocument.Parse(statuses);
+            var input = JsonSerializer.SerializeToElement(new { statuses = parsed.RootElement, archiveSucceeds });
+            var response = await Lab.RunAsync(input, live);
+            if (live)
+            {
+                liveResult = JsonSerializer.SerializeToElement(response, LabService.Json);
+                status = $"Live commentary stop reason: {liveResult.Value.GetProperty("stopReason").GetString()}.";
+            }
+            else
+            {
+                result = Lesson.Run(input);
+                status = "Experiment recorded in the local run journal.";
+            }
+        }
+        catch (JsonException) { status = "Statuses must be a valid JSON array."; }
+        catch (Exception error) { status = error.Message; }
+        finally { busy = false; }
+    }
+}

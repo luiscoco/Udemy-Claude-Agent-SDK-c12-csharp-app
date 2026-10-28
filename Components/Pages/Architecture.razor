@@ -1,0 +1,43 @@
+@page "/architecture.html"
+@page "/architecture"
+@using LessonC12.Services
+@inject IWebHostEnvironment Environment
+<PageTitle>C12 · Architecture and workflow</PageTitle>
+<main class="student-shell">
+    <div class="student-brand"><a href="/">How <span>Claude Managed Agents</span> Works</a><span class="student-badge">BLAZOR / .NET 10</span></div>
+    <h1>Architecture &amp; workflow</h1>
+    <StudentNav />
+    <section class="student-section">
+        <h2>Configure → run → verify</h2>
+        <div class="architecture-flow" aria-label="Application architecture"><span>Blazor form</span>→<span>LabService: validate and serialize runs</span>→<span>Lesson.Run: local reducer</span>→<span>JSONL journal + displayed evidence</span></div>
+        <p>The browser sends Blazor events through its server circuit. C# services execute the lesson and write the journal. The /api/lesson, /api/source, /api/run and /api/live routes also support scripts. JSON requests are bounded, foreign origins rejected, and concurrent runs receive a conflict.</p>
+        <div class="architecture-flow" aria-label="Optional live commentary"><span>Local result</span>→<span>AnthropicClient.Beta.Sessions</span>→<span>Observe events + send message</span>→<span>Text + stop reason + usage</span></div>
+        <p>Live commentary uses Anthropic 13.3.0 with the Managed Agents beta header, no tools, no MCP servers, no skills, a $10 session budget, no automatic retries, and a 60 second observation deadline. The configured model is used when provisioning the agent.</p>
+        <h2>Cleanup decision</h2>
+        <div class="student-table"><table><thead><tr><th>First settled observation</th><th>Archive succeeds</th><th>Outcome</th><th>Cleanup</th></tr></thead><tbody>
+            <tr><td>None</td><td>Either</td><td>unconfirmed</td><td>pending</td></tr>
+            <tr><td>idle</td><td>true</td><td>passed</td><td>archived</td></tr>
+            <tr><td>idle</td><td>false</td><td>paused</td><td>pending</td></tr>
+            <tr><td>terminated</td><td>Ignored</td><td>passed</td><td>not-needed</td></tr>
+        </tbody></table></div>
+        <p class="student-note">@Lesson.Scope</p>
+        <p>Live commentary uses a fresh 3 second cleanup token to attempt an interrupt on failure. Its acknowledgement is never reported as a confirmed stop. Commentary does not archive sessions.</p>
+        <h2>Live cleanup scenarios</h2>
+        <div class="architecture-flow"><span>Fresh session + work</span>→<span>Interrupt using independent token</span>→<span>Poll real status</span>→<span>Archive after idle, or report pending cleanup</span></div>
+        <p>The separate /api/live-scenario route uses LiveScenarios.cs. Its scenarios confirm and archive, try a one second cleanup window, or deliberately defer archive. Standard cleanup has a 20 second window and a $1 session budget. A cancelled work token does not cancel cleanup. Only the newly created session is affected. Local status arrays and archive flags do not control live results.</p>
+        <p>A short window may still succeed. Defer archive leaves a real idle session unarchived; it does not simulate a provider failure. ActiveStatusObserved records whether running or rescheduling was seen before the interrupt attempt. A confirmed stop alone does not prove the interrupt caused it.</p>
+        <h2>Recover pending sessions</h2>
+        <div class="architecture-flow"><span>Journal allowlist</span>→<span>Fresh status retrieval</span>→<span>Interrupt if unsettled</span>→<span>Confirm stop and archive</span>→<span>Append cleanup evidence</span></div>
+        <p>GET /api/live-sessions lists the latest pending results. POST /api/live-cleanup accepts only a recorded session ID. Recovery creates no session or work message. It uses a separate 20 second deadline, detects archived_at, archives only after idle and keeps unresolved cleanup pending. Recovery shares the run gate. Evidence is appended to live-cleanups.jsonl without rewriting the original run journal.</p>
+    </section>
+    <section class="student-section"><h2>Actual C# source</h2>
+        @foreach (var name in new[] { "Lesson.cs", "LabService.cs", "LiveCommentary.cs", "LiveScenarios.cs", "ResourceSetup.cs" })
+        {
+            <article class="student-step"><h3>Services/@name</h3><details><summary>Read implementation</summary><pre><code>@ReadSource(name)</code></pre></details></article>
+        }
+    </section>
+    <footer>LESSON C12 · LEARN → CONFIGURE → RUN → VERIFY</footer>
+</main>
+@code {
+    private string ReadSource(string name) => File.ReadAllText(Path.Combine(Environment.ContentRootPath, "Services", name));
+}

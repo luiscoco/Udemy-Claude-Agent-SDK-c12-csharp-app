@@ -1,0 +1,6 @@
+body{font-size:20px}.card p,.status,.badge{font-size:18px}.card label{font-size:20px}pre{max-width:100%;overflow:auto}.student-nav{clear:both}main{min-width:0}
+.live-observations{border-collapse:collapse;width:100%}.live-observations th,.live-observations td{text-align:left;padding:10px;border-bottom:1px solid var(--line)}
+.card code{overflow-wrap:anywhere}
+#blazor-error-ui{display:none;position:fixed;bottom:0;left:0;width:100%;padding:1rem;background:#fff2dc;color:#112342;z-index:1000}
+html[data-theme=dark] p,html[data-theme=dark] li,html[data-theme=dark] .flow small{color:var(--muted)}
+.architecture-flow{display:flex;flex-wrap:wrap;gap:14px;align-items:center}.architecture-flow span{padding:16px;border:1px solid var(--line);border-radius:12px;background:var(--soft)}

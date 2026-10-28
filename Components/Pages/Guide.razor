@@ -1,0 +1,41 @@
+@page "/guide.html"
+@page "/guide"
+@using LessonC12.Services
+<PageTitle>C12 · Learning and run guide</PageTitle>
+<main class="student-shell">
+    <div class="student-brand"><a href="/">How <span>Claude Managed Agents</span> Works</a><span class="student-badge">CONCEPT 12 / 60 · C#</span></div>
+    <div class="student-hero"><div><p class="student-eyebrow">STUDENT APPLICATION GUIDE</p><h1>@Lesson.Title</h1><p>Learn the concepts, follow the C# source, and verify the application yourself.</p></div><img src="astronaut.png" alt="" /></div>
+    <StudentNav />
+    <section id="learning" class="student-section">
+        <h2>What you will learn</h2>
+        <div class="student-cards">
+            <article class="student-card"><h3>Independent cleanup deadline</h3><p>Do not reuse an aborted run signal. A separate CancellationTokenSource gives cleanup its own deadline.</p></article>
+            <article class="student-card"><h3>Interrupt acknowledgement is not a stop</h3><p>Running and rescheduling leave the remote stop unconfirmed. Sending an interrupt does not prove the session stopped.</p></article>
+            <article class="student-card"><h3>Confirm idle or terminated</h3><p>An idle session can be archived. A terminated session needs no archive in this local model.</p></article>
+        </div>
+        <p class="student-note">@Lesson.Scope</p>
+        <h2>Scenarios to investigate</h2>
+        <div class="student-table"><table><thead><tr><th>Scenario</th><th>Expected outcome</th><th>Evidence</th></tr></thead><tbody>
+            @foreach (var scenario in Lesson.Cases) { <tr><td>@scenario.Label</td><td>@scenario.Expected</td><td>@string.Join(", ", scenario.Checks.Select(check => $"{check.Key}: {check.Value}"))</td></tr> }
+        </tbody></table></div>
+    </section>
+    <section id="run-guide" class="student-section">
+        <h2>How to run this application</h2>
+        <article class="student-step"><h3>1 · Install .NET 10</h3><p>Open a terminal in lesson-c12-csharp-app. The application uses Blazor Interactive Server and the Anthropic 13.3.0 NuGet package.</p><pre>dotnet --version
+dotnet restore
+dotnet run</pre><p>Open <a href="http://localhost:5012">http://localhost:5012</a>. Keep the terminal open. Stop with Ctrl+C.</p></article>
+        <article class="student-step"><h3>2 · Run local scenarios</h3><p>No API key is required. Choose a scenario in the lab, edit the statuses JSON or archive checkbox, then press Run local experiment. Compare the outcome, steps and structured evidence. Each local result is appended to .lab-data/runs.jsonl.</p></article>
+        <article class="student-step"><h3>3 · Configure live scenarios and commentary</h3><p>Copy the safe example and enter your own credentials. Environment variables and .NET user secrets are also supported. Restart after changes. Credentials are read only on the server.</p><pre>Copy-Item .env.example .env
+notepad .env</pre><pre>ANTHROPIC_API_KEY=your_api_key
+CLAUDE_MANAGED_AGENT_ID=your_agent_id
+CLAUDE_MANAGED_ENVIRONMENT_ID=your_environment_id
+CLAUDE_MODEL=claude-opus-5-5
+PORT=5012</pre></article>
+        <article class="student-step"><h3>4 · Prepare resources if needed</h3><pre>dotnet run -- --setup</pre><p>This explicit command creates a limited-network environment and a text-only agent using the SDK. It saves each ID immediately to .env and reuses configured IDs. Choose a model available to your account. If a network failure leaves creation uncertain, inspect your account before retrying.</p></article>
+        <article class="student-step"><h3>5 · Run a live scenario</h3><p>Restart with dotnet run. In Live run scenarios, choose Interrupt, confirm and archive, then press Run live scenario. This creates a fresh real session with a $1 budget, sends work, attempts an interrupt with a separate cleanup token, observes actual status, and archives after idle. API use may incur charges. Inspect the session ID, timestamped observations and full evidence.</p><p>Try a short cleanup window allows one second; a fast provider may still finish successfully. Confirm stop and defer archive deliberately leaves an idle session unarchived. It does not force an archive failure. Use Cancel work; continue cleanup to cancel the work token while independent cleanup continues. Closing the browser does not confirm a remote stop.</p><p>The optional Request live commentary button remains available to discuss local results. Commentary itself does not execute the cleanup scenario.</p></article>
+        <article class="student-step"><h3>6 · Finish pending cleanup</h3><p>Use Recheck and finish cleanup to select a session from this app's local journals. The app checks current provider state, interrupts only if still unsettled, and archives after idle. It recognizes already archived sessions. No new session or work message is created. Completed sessions disappear from the pending list; unresolved cleanup remains available after a page refresh or app restart.</p></article>
+        <article class="student-step"><h3>7 · Verify</h3><pre>dotnet build
+dotnet run --project verification/Verification.csproj</pre><p>Verification checks scenario outcomes, boundary conditions and validation. See README.md for HTTP and browser verification instructions.</p></article>
+    </section>
+    <footer>LESSON C12 · LEARN → CONFIGURE → RUN → VERIFY</footer>
+</main>
